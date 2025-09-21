@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Array Photobooth</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .screen { display: none; }
+        .active { display: flex; }
+        .loader {
+            border: 8px solid #f3f3f3; /* Light grey */
+            border-top: 8px solid #3498db; /* Blue */
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .thumbnail-selected {
+            outline: 4px solid #3B82F6; /* Blue outline */
+            outline-offset: 2px;
+            transform: scale(1.05);
+            transition: all 0.2s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 flex items-center justify-center min-h-screen">
+    <div class="container mx-auto p-4 max-w-2xl w-full bg-white rounded-2xl shadow-xl">
+        <header class="text-center p-4 border-b">
+            <h1 class="text-3xl font-bold text-gray-700">Array Photobooth</h1>
+            <p class="text-gray-500">Abadikan Momen, Bagikan Cerita.</p>
+        </header>
+        <main class="p-4 md:p-6 min-h-[450px]">
+            <!-- Screen 0: Landing Page -->
+            <div id="landing-screen" class="screen flex-col items-center justify-center text-center">
+                <h2 class="text-4xl font-bold mb-2">Selamat Datang!</h2>
+                <p class="text-lg text-gray-600 mb-6">Abadikan momen spesial Anda dengan satu klik.</p>
+                <button id="start-button" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-8 rounded-lg shadow-md text-xl">Mulai Gratis</button>
+            </div>
+
+            <!-- Screen 1: Frame Selection -->
+            <div id="frame-screen" class="screen flex-col items-center">
+                <h2 class="text-2xl font-semibold mb-4 text-center">Langkah 1: Pilih Bingkai Favorit Anda</h2>
+                <div id="frame-container" class="grid grid-cols-2 gap-4 md:gap-6 cursor-pointer w-full"></div>
+            </div>
+            
+            <!-- Screen 2: Capture / Upload Method -->
+            <div id="method-screen" class="screen flex-col items-center justify-center">
+                <h2 class="text-2xl font-semibold mb-6 text-center">Langkah 2: Siapkan Foto</h2>
+                <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
+                    <button id="use-camera-button" class="bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-8 rounded-lg">Gunakan Kamera</button>
+                    <button class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-4 px-8 rounded-lg" onclick="document.getElementById('upload-input').click();">Unggah dari Galeri</button>
+                    <input type="file" id="upload-input" multiple accept="image/*" class="hidden">
+                </div>
+            </div>
+
+            <!-- Screen 3: Capture -->
+            <div id="capture-screen" class="screen flex-col items-center">
+                <h2 id="capture-title" class="text-2xl font-semibold mb-4 text-center">Ambil Foto</h2>
+                <div class="w-full bg-gray-200 rounded-lg overflow-hidden shadow-inner mb-4">
+                    <video id="video" class="w-full h-auto" autoplay playsinline></video>
+                    <canvas id="capture-canvas" class="hidden"></canvas>
+                </div>
+                <div class="flex items-center">
+                    <button id="capture-button" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg shadow-md">Ambil Foto</button>
+                    <button id="done-capturing-button" class="ml-4 bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg shadow-md">Selesai</button>
+                </div>
+            </div>
+
+            <!-- Screen 4: Photo Selection Gallery -->
+            <div id="selection-screen" class="screen flex-col items-center">
+                <h2 id="selection-title" class="text-2xl font-semibold mb-4 text-center">Langkah 3: Pilih Foto Terbaik</h2>
+                <div id="gallery-container" class="grid grid-cols-3 md:grid-cols-4 gap-2 mb-4 w-full h-64 overflow-y-auto p-2 bg-gray-50 rounded-lg"></div>
+                <button id="confirm-selection-button" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg shadow-md disabled:bg-gray-400" disabled>Lanjutkan</button>
+                <button id="retake-button" class="ml-4 bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-6 rounded-lg shadow-md">Ulangi Pilihan</button>
+            </div>
+
+            <!-- Screen 5: Result -->
+            <div id="result-screen" class="screen flex-col items-center text-center">
+                 <h2 class="text-2xl font-semibold mb-4">Foto Anda Siap!</h2>
+                <canvas id="result-canvas" class="w-full max-w-xs rounded-lg shadow-lg mb-4"></canvas>
+                <div class="bg-gray-100 p-4 rounded-lg w-full max-w-md">
+                     <p class="font-semibold mb-2">Pindai QR Code atau gunakan tautan:</p>
+                    <div id="qrcode" class="flex justify-center mb-4"></div>
+                    <input id="photo-link" type="text" readonly class="w-full p-2 border rounded-md text-center text-sm bg-gray-200 cursor-pointer" onclick="this.select()">
+                </div>
+                <button id="start-over-button" class="mt-4 bg-gray-800 hover:bg-gray-900 text-white font-bold py-3 px-6 rounded-lg shadow-md">Mulai Lagi</button>
+            </div>
+
+            <!-- Universal Loading Screen -->
+            <div id="loading-screen" class="screen flex-col items-center justify-center">
+                <div class="loader"></div>
+                <p id="loading-text" class="mt-4 text-lg font-medium text-gray-600">Memproses...</p>
+            </div>
+        </main>
+    </div>
+    <script>
+        // --- State Management & Configuration ---
+        const BACKEND_URL = 'http://127.0.0.1:8000'; 
+        const MAX_CAPTURES = 10;
+        const appState = {
+            capturedPhotos: [],
+            selectedPhotos: [],
+            selectedLayout: null,
+        };
+        const frameLayouts = [
+            {
+                id: 'frame_3_vertical', name: 'Strip Klasik (3 Foto)', src: '/static/frames/Frame-dummy.png', photoCount: 3,
+                slots: [
+                    { x: 30, y: 30,  width: 530, height: 222 },
+                    { x: 30, y: 282, width: 530, height: 222 },
+                    { x: 30, y: 534, width: 530, height: 222 }
+                ]
+            },
+            {
+                id: 'frame_6_grid', name: 'Grid Enam (6 Foto)', src: '/static/frames/Frame-dummy.png', photoCount: 6,
+                slots: [
+                    { x: 30,  y: 30,  width: 255, height: 229 }, { x: 305, y: 30,  width: 255, height: 229 },
+                    { x: 30,  y: 279, width: 255, height: 229 }, { x: 305, y: 279, width: 255, height: 229 },
+                    { x: 30,  y: 528, width: 255, height: 229 }, { x: 305, y: 528, width: 255, height: 229 }
+                ]
+            }
+        ];
+        
+        // --- Element References ---
+        const screens = {};
+        document.querySelectorAll('.screen').forEach(el => screens[el.id.replace('-screen','')] = el);
+        
+        const video = document.getElementById('video');
+        const captureCanvas = document.getElementById('capture-canvas');
+        
+        // --- App Logic ---
+        function showScreen(screenName, text = 'Memproses...') {
+            document.getElementById('loading-text').textContent = text;
+            Object.values(screens).forEach(screen => screen.classList.remove('active'));
+            screens[screenName]?.classList.add('active');
+        }
+
+        function populateFrameChoices() {
+            const container = document.getElementById('frame-container');
+            container.innerHTML = '';
+            frameLayouts.forEach(layout => {
+                container.innerHTML += `
+                    <div class="frame-choice text-center" data-id="${layout.id}">
+                        <img src="${layout.src}" class="w-full rounded-lg shadow-md hover:ring-4 ring-blue-400">
+                        <p class="text-sm font-medium mt-2">${layout.name}</p>
+                    </div>
+                `;
+            });
+        }
+        
+        function handleFrameSelection(e) {
+            const frameChoice = e.target.closest('.frame-choice');
+            if (!frameChoice) return;
+            appState.selectedLayout = frameLayouts.find(l => l.id === frameChoice.dataset.id);
+            showScreen('method');
+        }
+        
+        async function startCamera() {
+            showScreen('capture');
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
+                video.srcObject = stream;
+                video.onloadedmetadata = () => { captureCanvas.width = video.videoWidth; captureCanvas.height = video.videoHeight; };
+                document.getElementById('capture-title').textContent = `Foto Diambil: ${appState.capturedPhotos.length}/${MAX_CAPTURES}`;
+            } catch (err) {
+                alert("Tidak bisa mengakses kamera. Mohon izinkan akses kamera di browser Anda.");
+                showScreen('method');
+            }
+        }
+        
+        function handleCapture() {
+            if (appState.capturedPhotos.length >= MAX_CAPTURES) {
+                alert(`Anda sudah mencapai batas maksimum ${MAX_CAPTURES} foto.`);
+                goToSelectionScreen();
+                return;
+            }
+            captureCanvas.getContext('2d').drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+            appState.capturedPhotos.push(captureCanvas.toDataURL('image/jpeg', 0.9));
+            document.getElementById('capture-title').textContent = `Foto Diambil: ${appState.capturedPhotos.length}/${MAX_CAPTURES}`;
+        }
+        
+        function handleFileUpload(event) {
+            const files = Array.from(event.target.files);
+            if (!files.length) return;
+            showScreen('loading', 'Mengunggah gambar...');
+            
+            const promises = files.map(file => {
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = e => resolve(e.target.result);
+                    reader.readAsDataURL(file);
+                });
+            });
+
+            Promise.all(promises).then(dataUrls => {
+                appState.capturedPhotos.push(...dataUrls);
+                goToSelectionScreen();
+            });
+            event.target.value = null; // Reset input
+        }
+        
+        function goToSelectionScreen() {
+            const gallery = document.getElementById('gallery-container');
+            const title = document.getElementById('selection-title');
+            gallery.innerHTML = '';
+            
+            title.textContent = `Pilih ${appState.selectedLayout.photoCount} foto terbaik Anda`;
+
+            appState.capturedPhotos.forEach((src, index) => {
+                const img = document.createElement('img');
+                img.src = src;
+                img.dataset.index = index;
+                img.className = 'w-full h-24 object-cover rounded-md cursor-pointer transition-transform';
+                img.onclick = togglePhotoSelection;
+                gallery.appendChild(img);
+            });
+            appState.selectedPhotos = [];
+            updateSelectionButton();
+            showScreen('selection');
+        }
+
+        function togglePhotoSelection(event) {
+            const img = event.target;
+            const index = parseInt(img.dataset.index);
+            const selectedIndex = appState.selectedPhotos.indexOf(index);
+            
+            if (selectedIndex > -1) {
+                appState.selectedPhotos.splice(selectedIndex, 1);
+                img.classList.remove('thumbnail-selected');
+            } else {
+                if (appState.selectedPhotos.length < appState.selectedLayout.photoCount) {
+                    appState.selectedPhotos.push(index);
+                    img.classList.add('thumbnail-selected');
+                } else {
+                    alert(`Anda hanya bisa memilih ${appState.selectedLayout.photoCount} foto.`);
+                }
+            }
+            updateSelectionButton();
+        }
+
+        function updateSelectionButton() {
+            const btn = document.getElementById('confirm-selection-button');
+            const required = appState.selectedLayout.photoCount;
+            const selected = appState.selectedPhotos.length;
+            btn.disabled = selected !== required;
+            btn.textContent = `Lanjutkan (${selected}/${required})`;
+        }
+        
+        async function processAndFinalize() {
+            showScreen('loading', 'Menyusun foto Anda...');
+            const finalImage = await generateFinalImage();
+            
+            showScreen('loading', 'Mengunggah ke server...');
+            const uploadResult = await uploadImage(finalImage);
+            
+            if (uploadResult && uploadResult.url) {
+                displayFinalResult(uploadResult.url);
+            } else {
+                alert("Gagal mengunggah gambar. Silakan coba lagi.");
+                resetApp();
+            }
+        }
+
+        function displayFinalResult(url) {
+            const qrcodeContainer = document.getElementById('qrcode');
+            const resultCanvas = document.getElementById('result-canvas');
+            const photoLink = document.getElementById('photo-link');
+            
+            photoLink.value = url;
+            qrcodeContainer.innerHTML = '';
+            new QRCode(qrcodeContainer, { text: url, width: 150, height: 150 });
+            
+            // Tampilkan gambar final di canvas hasil
+            const finalImg = new Image();
+            finalImg.crossOrigin = "anonymous";
+            finalImg.onload = () => {
+                const ctx = resultCanvas.getContext('2d');
+                resultCanvas.width = finalImg.width;
+                resultCanvas.height = finalImg.height;
+                ctx.drawImage(finalImg, 0, 0);
+            };
+            finalImg.src = url; // Gunakan URL dari server untuk memastikan gambar benar
+            
+            showScreen('result');
+        }
+
+        function generateFinalImage() {
+            return new Promise(resolve => {
+                const finalPhotos = appState.selectedPhotos.map(i => appState.capturedPhotos[i]);
+                const photoImages = finalPhotos.map(src => {
+                    const img = new Image(); img.src = src; return img;
+                });
+                const frameImg = new Image(); frameImg.src = appState.selectedLayout.src;
+                
+                Promise.all([frameImg, ...photoImages].map(img => new Promise(res => img.onload = res)))
+                .then(() => {
+                    const canvas = document.createElement('canvas');
+                    // Asumsi ukuran 590x787 dari diskusi sebelumnya
+                    canvas.width = 590; canvas.height = 787;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(frameImg, 0, 0, canvas.width, canvas.height);
+                    photoImages.forEach((p, i) => {
+                        const s = appState.selectedLayout.slots[i];
+                        if(s) drawAndCropImage(ctx, p, s.x, s.y, s.width, s.height);
+                    });
+                    resolve(canvas.toDataURL('image/png'));
+                });
+            });
+        }
+        
+        async function uploadImage(imageDataUrl) {
+            try {
+                const response = await fetch(`${BACKEND_URL}/upload`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image_data: imageDataUrl })
+                });
+                return await response.json();
+            } catch (error) {
+                console.error('Upload failed:', error);
+                return null;
+            }
+        }
+        
+        function drawAndCropImage(ctx, img, dx, dy, dWidth, dHeight) {
+            const imgAspectRatio = img.naturalWidth / img.naturalHeight;
+            const slotAspectRatio = dWidth / dHeight;
+            let sx, sy, sWidth, sHeight;
+            if (imgAspectRatio > slotAspectRatio) {
+                sHeight = img.naturalHeight; sWidth = sHeight * slotAspectRatio;
+                sx = (img.naturalWidth - sWidth) / 2; sy = 0;
+            } else {
+                sWidth = img.naturalWidth; sHeight = sWidth / slotAspectRatio;
+                sx = 0; sy = (img.naturalHeight - sHeight) / 2;
+            }
+            ctx.drawImage(img, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight);
+        }
+        
+        function resetApp() {
+            Object.keys(appState).forEach(key => {
+                if (Array.isArray(appState[key])) appState[key] = [];
+                else appState[key] = null;
+            });
+            showScreen('landing');
+        }
+
+        // --- Event Listeners ---
+        document.getElementById('start-button').addEventListener('click', () => showScreen('frame'));
+        document.getElementById('frame-container').addEventListener('click', handleFrameSelection);
+        document.getElementById('use-camera-button').addEventListener('click', startCamera);
+        document.getElementById('upload-input').addEventListener('change', handleFileUpload);
+        document.getElementById('capture-button').addEventListener('click', handleCapture);
+        document.getElementById('done-capturing-button').addEventListener('click', goToSelectionScreen);
+        document.getElementById('confirm-selection-button').addEventListener('click', processAndFinalize);
+        document.getElementById('retake-button').addEventListener('click', goToSelectionScreen);
+        document.getElementById('start-over-button').addEventListener('click', resetApp);
+        
+        // --- Initial Load ---
+        document.addEventListener('DOMContentLoaded', () => {
+            populateFrameChoices();
+            showScreen('landing');
+        });
+    </script>
+</body>
+</html>
+
