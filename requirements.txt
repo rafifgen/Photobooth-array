@@ -19,6 +19,7 @@ fastapi==0.116.2
 gitdb==4.0.12
 GitPython==3.1.45
 google-crc32c==1.7.1
+gunicorn==23.0.0
 h11==0.16.0
 idna==3.10
 ifaddr==0.2.0
