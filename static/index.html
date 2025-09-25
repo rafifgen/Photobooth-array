@@ -240,14 +240,19 @@
         async function loadFrameConfigurations() {
             const staticFrameData = [
                 {
-                    id: 'frame_3_vertical', 
-                    name: 'Strip Klasik (3 Foto)', 
-                    src: '/static/frames/Frame-dummy.png'
+                    id: 'frame_2_photos', 
+                    name: 'Frame 2 Foto', 
+                    src: '/static/frames/2/20250924_221409_0000.png'
                 },
                 {
-                    id: 'frame_6_grid', 
-                    name: 'Grid Enam (6 Foto)', 
-                    src: '/static/frames/Frame-dummy.png' // You might want to use different frame for 6-grid
+                    id: 'frame_3_photos', 
+                    name: 'Frame 3 Foto', 
+                    src: '/static/frames/3/20250924_220911_0000.png'
+                },
+                {
+                    id: 'frame_4_photos', 
+                    name: 'Frame 4 Foto', 
+                    src: '/static/frames/4/20250924_220911_0001.png'
                 }
             ];
             
@@ -277,9 +282,19 @@
         function getHardcodedFrameLayouts() {
             return [
                 {
-                    id: 'frame_3_vertical', 
-                    name: 'Strip Klasik (3 Foto)', 
-                    src: '/static/frames/Frame-dummy.png', 
+                    id: 'frame_2_photos', 
+                    name: 'Frame 2 Foto',
+                    src: '/static/frames/2/20250924_221409_0000.png',
+                    photoCount: 2,
+                    slots: [
+                        { x: 30, y: 30,  width: 530, height: 370, radius: 20 },
+                        { x: 30, y: 420, width: 530, height: 370, radius: 20 }
+                    ]
+                },
+                {
+                    id: 'frame_3_photos',
+                    name: 'Frame 3 Foto',
+                    src: '/static/frames/3/20250924_220911_0000.png',
                     photoCount: 3,
                     slots: [
                         { x: 30, y: 30,  width: 530, height: 222, radius: 20 },
@@ -288,17 +303,15 @@
                     ]
                 },
                 {
-                    id: 'frame_6_grid', 
-                    name: 'Grid Enam (6 Foto)', 
-                    src: '/static/frames/Frame-dummy.png', 
-                    photoCount: 6,
+                    id: 'frame_4_photos',
+                    name: 'Frame 4 Foto',
+                    src: '/static/frames/4/20250924_220911_0001.png',
+                    photoCount: 4,
                     slots: [
-                        { x: 40,  y: 40,  width: 245, height: 222, radius: 20 },
-                        { x: 305, y: 40,  width: 245, height: 222, radius: 20 },
-                        { x: 40,  y: 282, width: 245, height: 222, radius: 20 },
-                        { x: 305, y: 282, width: 245, height: 222, radius: 20 },
-                        { x: 40,  y: 524, width: 245, height: 222, radius: 20 },
-                        { x: 305, y: 524, width: 245, height: 222, radius: 20 }
+                        { x: 40,  y: 40,  width: 245, height: 340, radius: 20 },
+                        { x: 305, y: 40,  width: 245, height: 340, radius: 20 },
+                        { x: 40,  y: 400, width: 245, height: 340, radius: 20 },
+                        { x: 305, y: 400, width: 245, height: 340, radius: 20 }
                     ]
                 }
             ];
