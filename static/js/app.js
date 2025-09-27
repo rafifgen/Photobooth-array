@@ -1,6 +1,3 @@
-import Cropper from 'https://unpkg.com/cropperjs@1.5.13/dist/cropper.esm.js';
-
-// Tunggu hingga seluruh konten HTML dimuat sebelum menjalankan skrip apa pun
 document.addEventListener('DOMContentLoaded', () => {
     
     // --- State Management & Configuration ---
@@ -8,11 +5,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const MAX_CAPTURES = 10;
     const appState = {
         capturedPhotos: [],
-        selectedPhotos: [],
-        photoCropData: new Map(),
+        selectedPhotos: [], // Menyimpan INDEKS dari capturedPhotos
         selectedLayout: null,
-        currentCropIndex: 0,
-        cropperInstance: null,
     };
     let frameLayouts = [];
 
@@ -23,7 +17,6 @@ document.addEventListener('DOMContentLoaded', () => {
         method: document.getElementById('method-screen'),
         capture: document.getElementById('capture-screen'),
         selection: document.getElementById('selection-screen'),
-        crop: document.getElementById('crop-screen'),
         result: document.getElementById('result-screen'),
         loading: document.getElementById('loading-screen'),
     };
@@ -31,9 +24,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const captureCanvasEl = document.getElementById('capture-canvas');
     const frameContainer = document.getElementById('frame-container');
     const galleryContainer = document.getElementById('gallery-container');
-    const cropperImage = document.getElementById('cropper-image');
     
-    // --- Slot Detection ---
+    // --- Slot Detection (Tidak Berubah) ---
     async function detectPhotoSlots(frameImageSrc, minSlotSize = 50) {
         return new Promise((resolve) => {
             const img = new Image();
@@ -123,20 +115,52 @@ document.addEventListener('DOMContentLoaded', () => {
         if (appState.selectedLayout) showScreen('method');
     }
 
+    // PERUBAHAN KUNCI: Menyesuaikan rasio aspek kamera
     async function startCamera() {
         showScreen('capture');
+        const firstSlot = appState.selectedLayout.slots[0];
+        const targetAspectRatio = firstSlot.width / firstSlot.height;
+
+        const constraints = {
+            video: {
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+                aspectRatio: { ideal: targetAspectRatio },
+                facingMode: 'user'
+            }
+        };
+
+        // --- PERUBAHAN KUNCI DIMULAI DI SINI ---
+
+        // 1. Atur gaya CSS elemen video secara dinamis
+        videoEl.style.aspectRatio = targetAspectRatio;
+        videoEl.style.objectFit = 'cover'; // Memastikan video mengisi area tanpa distorsi
+
+        // --- PERUBAHAN KUNCI SELESAI ---
+
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } });
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
             videoEl.srcObject = stream;
             await videoEl.play();
             captureCanvasEl.width = videoEl.videoWidth;
             captureCanvasEl.height = videoEl.videoHeight;
             updateCaptureTitle();
         } catch (err) {
-            alert("Tidak bisa mengakses kamera.");
-            showScreen('method');
+            console.error("Gagal memulai kamera dengan rasio aspek, mencoba tanpa:", err);
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+                videoEl.srcObject = stream;
+                await videoEl.play();
+                captureCanvasEl.width = videoEl.videoWidth;
+                captureCanvasEl.height = videoEl.videoHeight;
+                updateCaptureTitle();
+            } catch (fallbackErr) {
+                alert("Tidak bisa mengakses kamera.");
+                showScreen('method');
+            }
         }
     }
+
     
     function updateCaptureTitle() {
         document.getElementById('capture-title').textContent = `Foto: ${appState.capturedPhotos.length}/${MAX_CAPTURES} (Perlu ${appState.selectedLayout.photoCount})`;
@@ -207,52 +231,25 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.disabled = length !== photoCount;
         btn.textContent = `Lanjutkan (${length}/${photoCount})`;
     }
+    
+    // PERUBAHAN KUNCI: Fungsi ini akan menggambar gambar dengan logika center-crop
+    function drawImageToSlot(ctx, img, slot) {
+        const imgRatio = img.naturalWidth / img.naturalHeight;
+        const slotRatio = slot.width / slot.height;
+        let sx, sy, sWidth, sHeight;
 
-    function startCroppingProcess() {
-        appState.currentCropIndex = 0;
-        appState.photoCropData.clear();
-        loadCropperForCurrentImage();
-        showScreen('crop');
-    }
-
-    function loadCropperForCurrentImage() {
-        if (appState.cropperInstance) appState.cropperInstance.destroy();
-        
-        const photoIndex = appState.selectedPhotos[appState.currentCropIndex];
-        const imageSrc = appState.capturedPhotos[photoIndex];
-        
-        document.getElementById('frame-overlay').src = appState.selectedLayout.src;
-        document.getElementById('crop-title').textContent = `Atur Foto ${appState.currentCropIndex + 1}/${appState.selectedPhotos.length}`;
-        document.getElementById('next-photo-button').style.display = appState.currentCropIndex < appState.selectedPhotos.length - 1 ? 'block' : 'none';
-        document.getElementById('finish-crop-button').style.display = appState.currentCropIndex === appState.selectedPhotos.length - 1 ? 'block' : 'none';
-        
-        cropperImage.onload = () => {
-            const slot = appState.selectedLayout.slots[appState.currentCropIndex];
-            // 'Cropper' sekarang dijamin ada karena `defer`
-            appState.cropperInstance = new Cropper(cropperImage, {
-                aspectRatio: slot.width / slot.height, viewMode: 1, dragMode: 'move',
-                background: false, autoCropArea: 0.95, zoomable: true, movable: true,
-                cropBoxResizable: true, cropBoxMovable: true,
-            });
-        };
-        cropperImage.src = imageSrc;
-    }
-
-    function handleNextPhoto() {
-        if (!appState.cropperInstance) return;
-        appState.photoCropData.set(appState.selectedPhotos[appState.currentCropIndex], appState.cropperInstance.getData());
-        if (appState.currentCropIndex < appState.selectedPhotos.length - 1) {
-            appState.currentCropIndex++;
-            loadCropperForCurrentImage();
+        if (imgRatio > slotRatio) { // Gambar lebih lebar dari slot
+            sHeight = img.naturalHeight;
+            sWidth = sHeight * slotRatio;
+            sx = (img.naturalWidth - sWidth) / 2;
+            sy = 0;
+        } else { // Gambar lebih tinggi dari slot
+            sWidth = img.naturalWidth;
+            sHeight = sWidth / slotRatio;
+            sx = 0;
+            sy = (img.naturalHeight - sHeight) / 2;
         }
-    }
-
-    function handleFinishCropping() {
-        if (!appState.cropperInstance) return;
-        appState.photoCropData.set(appState.selectedPhotos[appState.currentCropIndex], appState.cropperInstance.getData());
-        appState.cropperInstance.destroy();
-        appState.cropperInstance = null;
-        processAndFinalize();
+        ctx.drawImage(img, sx, sy, sWidth, sHeight, slot.x, slot.y, slot.width, slot.height);
     }
 
     async function processAndFinalize() {
@@ -291,6 +288,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showScreen('result');
     }
 
+    // PERUBAHAN KUNCI: Menggunakan fungsi drawImageToSlot
     function generateFinalImage() {
         return new Promise((resolve, reject) => {
             const frameImg = new Image();
@@ -315,12 +313,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         const ctx = canvas.getContext('2d');
                         photoImages.forEach((photoImg, i) => {
                             const slot = appState.selectedLayout.slots[i];
-                            const cropData = appState.photoCropData.get(appState.selectedPhotos[i]);
-                            if (slot && cropData) {
-                                ctx.drawImage(photoImg,
-                                    cropData.x, cropData.y, cropData.width, cropData.height,
-                                    slot.x, slot.y, slot.width, slot.height
-                                );
+                            if (slot) {
+                                drawImageToSlot(ctx, photoImg, slot); // Gunakan fungsi baru
                             }
                         });
                         ctx.drawImage(frameImg, 0, 0);
@@ -353,12 +347,7 @@ document.addEventListener('DOMContentLoaded', () => {
             videoEl.srcObject.getTracks().forEach(track => track.stop());
             videoEl.srcObject = null;
         }
-        Object.assign(appState, { capturedPhotos: [], selectedPhotos: [], selectedLayout: null, currentCropIndex: 0 });
-        appState.photoCropData.clear();
-        if (appState.cropperInstance) {
-            appState.cropperInstance.destroy();
-            appState.cropperInstance = null;
-        }
+        Object.assign(appState, { capturedPhotos: [], selectedPhotos: [], selectedLayout: null });
         showScreen('landing');
     }
 
@@ -374,9 +363,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('done-capturing-button').addEventListener('click', goToSelectionScreen);
         document.getElementById('retake-button').addEventListener('click', goToSelectionScreen);
         document.getElementById('start-over-button').addEventListener('click', resetApp);
-        document.getElementById('confirm-selection-button').addEventListener('click', startCroppingProcess);
-        document.getElementById('next-photo-button').addEventListener('click', handleNextPhoto);
-        document.getElementById('finish-crop-button').addEventListener('click', handleFinishCropping);
+        // PERUBAHAN: Tombol konfirmasi sekarang langsung memproses gambar
+        document.getElementById('confirm-selection-button').addEventListener('click', processAndFinalize);
 
         showScreen('loading', 'Memuat aplikasi...');
         await populateFrameChoices();
