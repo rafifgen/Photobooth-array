@@ -6,6 +6,7 @@
     <title>Array Photobooth</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/cropperjs"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; }
@@ -77,6 +78,17 @@
                 <div id="gallery-container" class="grid grid-cols-3 md:grid-cols-4 gap-2 mb-4 w-full h-64 overflow-y-auto p-2 bg-gray-50 rounded-lg"></div>
                 <button id="confirm-selection-button" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg shadow-md disabled:bg-gray-400" disabled>Lanjutkan</button>
                 <button id="retake-button" class="ml-4 bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-6 rounded-lg shadow-md">Ulangi Pilihan</button>
+            </div>
+
+            <div id="crop-screen" class="screen flex-col items-center">
+                <h2 class="text-2xl font-semibold mb-4 text-center">Langkah 3.5: Atur Pangkasan Foto</h2>
+                <div id="cropper-container" class="w-full h-96 mb-4">
+                    <img id="current-crop-image" class="max-w-full max-h-full" />
+                </div>
+                <div id="crop-controls" class="flex space-x-4">
+                    <button id="next-photo-button" class="bg-blue-500 ...">Foto Selanjutnya</button>
+                    <button id="finish-crop-button" class="bg-green-500 ...">Selesai Cropping</button>
+                </div>
             </div>
 
             <!-- Screen 5: Result -->

@@ -4,7 +4,13 @@ const MAX_CAPTURES = 10;
 const appState = {
     capturedPhotos: [],
     selectedPhotos: [],
+    // BARU: Menyimpan data crop (sx, sy, sWidth, sHeight) per index foto asli.
+    photoCropData: new Map(), 
     selectedLayout: null,
+    // BARU: Melacak indeks foto yang sedang di-crop dalam array selectedPhotos
+    currentCropIndex: 0, 
+    // BARU: Instance Cropper.js
+    cropperInstance: null 
 };
 
 // Dynamic frame layouts - will be populated by slot detection
@@ -33,33 +39,31 @@ async function detectPhotoSlots(frameImageSrc, minSlotSize = 50) {
             const visited = new Array(canvas.width * canvas.height).fill(false);
             const slots = [];
             
-            // Scan for white pixels and find connected regions
+            // Scan for transparent pixels and find connected regions
             for (let y = 0; y < canvas.height; y++) {
                 for (let x = 0; x < canvas.width; x++) {
                     const index = (y * canvas.width + x) * 4;
-                    const r = data[index];
-                    const g = data[index + 1];
-                    const b = data[index + 2];
+                    const red = data[index];
+                    const green = data[index + 1];
+                    const blue = data[index + 2];
+                    const alpha = data[index + 3];
                     
-                    // Check if pixel is white (with some tolerance)
-                    const isWhite = r > 250 && g > 250 && b > 250;
+                    // If pixel is transparent or white and not visited
+                    const isWhite = red === 255 && green === 255 && blue === 255;
+                    const isTransparent = alpha === 0;
                     
-                    // If pixel is white and not visited
-                    if (isWhite && !visited[y * canvas.width + x]) {
+                    if ((isTransparent || isWhite) && !visited[y * canvas.width + x]) {
                         const slot = floodFillAndGetBounds(data, visited, x, y, canvas.width, canvas.height);
                         
                         // Only consider regions large enough to be photo slots
-                        const width = slot.maxX - slot.minX;
-                        const height = slot.maxY - slot.minY;
-                        const area = width * height;
-                        
-                        if (area > minSlotSize * minSlotSize) {
+                        const area = (slot.maxX - slot.minX) * (slot.maxY - slot.minY);
+                        if (area > minSlotSize) {
                             slots.push({
                                 x: slot.minX,
                                 y: slot.minY,
-                                width: width,
-                                height: height,
-                                radius: Math.min(20, Math.floor(Math.min(width, height) * 0.1)) // Adaptive radius
+                                width: slot.maxX - slot.minX,
+                                height: slot.maxY - slot.minY,
+                                radius: 20 // Default radius
                             });
                         }
                     }
@@ -76,9 +80,6 @@ async function detectPhotoSlots(frameImageSrc, minSlotSize = 50) {
                 }
             });
             
-            // Log detected slots for debugging
-            console.log('Detected slots:', slots);
-            
             resolve(slots);
         };
         
@@ -91,16 +92,10 @@ async function detectPhotoSlots(frameImageSrc, minSlotSize = 50) {
     });
 }
 
-// Flood fill algorithm to find connected white regions
+// Flood fill algorithm to find connected transparent regions
 function floodFillAndGetBounds(data, visited, startX, startY, width, height) {
     const stack = [{x: startX, y: startY}];
     let minX = startX, maxX = startX, minY = startY, maxY = startY;
-    
-    // Get initial pixel color
-    const startIndex = (startY * width + startX) * 4;
-    const startR = data[startIndex];
-    const startG = data[startIndex + 1];
-    const startB = data[startIndex + 2];
     
     while (stack.length > 0) {
         const {x, y} = stack.pop();
@@ -109,16 +104,15 @@ function floodFillAndGetBounds(data, visited, startX, startY, width, height) {
         if (visited[y * width + x]) continue;
         
         const index = (y * width + x) * 4;
-        const r = data[index];
-        const g = data[index + 1];
-        const b = data[index + 2];
+        const red = data[index];
+        const green = data[index + 1];
+        const blue = data[index + 2];
+        const alpha = data[index + 3];
         
-        // Check if current pixel is similar to start pixel (with tolerance)
-        const isSimliar = Math.abs(r - startR) < 5 && 
-                            Math.abs(g - startG) < 5 && 
-                            Math.abs(b - startB) < 5;
+        const isWhite = red === 255 && green === 255 && blue === 255;
+        const isTransparent = alpha === 0;
         
-        if (!isSimliar) continue;
+        if (!isTransparent && !isWhite) continue; // Not a slot
         
         visited[y * width + x] = true;
         
@@ -210,8 +204,8 @@ function getHardcodedFrameLayouts() {
             src: '/static/frames/2/20250924_221409_0000.png',
             photoCount: 2,
             slots: [
-                { x: 30, y: 30,  width: 530, height: 370, radius: 20 },
-                { x: 30, y: 420, width: 530, height: 370, radius: 20 }
+                { x: 18, y: 20, width: 200, height: 330, radius: 10 },
+                { x: 18, y: 360, width: 200, height: 330, radius: 10 }
             ]
         },
         {
@@ -220,9 +214,9 @@ function getHardcodedFrameLayouts() {
             src: '/static/frames/3/20250924_220911_0000.png',
             photoCount: 3,
             slots: [
-                { x: 30, y: 30,  width: 530, height: 222, radius: 20 },
-                { x: 30, y: 282, width: 530, height: 222, radius: 20 },
-                { x: 30, y: 534, width: 530, height: 222, radius: 20 }
+                { x: 18, y: 20,  width: 200, height: 220, radius: 10 },
+                { x: 18, y: 250, width: 200, height: 220, radius: 10 },
+                { x: 18, y: 480, width: 200, height: 220, radius: 10 }
             ]
         },
         {
@@ -231,10 +225,10 @@ function getHardcodedFrameLayouts() {
             src: '/static/frames/4/20250924_220911_0001.png',
             photoCount: 4,
             slots: [
-                { x: 40,  y: 40,  width: 245, height: 340, radius: 20 },
-                { x: 305, y: 40,  width: 245, height: 340, radius: 20 },
-                { x: 40,  y: 400, width: 245, height: 340, radius: 20 },
-                { x: 305, y: 400, width: 245, height: 340, radius: 20 }
+                { x: 18,  y: 20,  width: 95, height: 160, radius: 10 },
+                { x: 123, y: 20,  width: 95, height: 160, radius: 10 },
+                { x: 18,  y: 190, width: 95, height: 160, radius: 10 },
+                { x: 123, y: 190, width: 95, height: 160, radius: 10 }
             ]
         }
     ];
@@ -246,6 +240,8 @@ document.querySelectorAll('.screen').forEach(el => screens[el.id.replace('-scree
 
 const video = document.getElementById('video');
 const captureCanvas = document.getElementById('capture-canvas');
+const cropperImage = document.getElementById('cropper-image');
+const cropTitle = document.getElementById('crop-title');
 
 // --- App Logic ---
 function showScreen(screenName, text = 'Memproses...') {
@@ -498,80 +494,100 @@ function generateFinalImage() {
             frameImg.src = appState.selectedLayout.src;
             
             let loadedCount = 0;
-            const totalImages = photoImages.length + 1;
+            const totalImages = photoImages.length + 1; // +1 for frame
+
             
             const checkAllLoaded = () => {
                 loadedCount++;
                 if (loadedCount === totalImages) {
                     try {
+                        // Gunakan ukuran asli frame
                         const canvas = document.createElement('canvas');
-                        
-                        // Menggunakan ukuran frame asli
                         canvas.width = frameImg.naturalWidth;
                         canvas.height = frameImg.naturalHeight;
                         const ctx = canvas.getContext('2d');
                         
-                        // Gambar frame terlebih dahulu untuk mendapatkan area yang transparan
-                        ctx.drawImage(frameImg, 0, 0);
-                        
-                        // Draw photos in slots
+                        // Log dimensi untuk debugging
+                        console.log('Canvas size:', canvas.width, canvas.height);
+                        console.log('Frame natural size:', frameImg.naturalWidth, frameImg.naturalHeight);
+
+                        console.log('Mulai menggambar foto...');
+                        console.log('Jumlah foto:', photoImages.length);
+                        console.log('Jumlah slot:', appState.selectedLayout.slots.length);
+
+                        // Set composite operation untuk foto
+                        ctx.globalCompositeOperation = 'destination-over';
+
+
+                        // Draw photos in the slots
                         photoImages.forEach((photoImg, index) => {
                             const slot = appState.selectedLayout.slots[index];
                             if (!slot) return;
-
-                            // Dapatkan dimensi frame asli dari hardcoded layout
-                            const baseFrameWidth = 590;
-                            const baseFrameHeight = 787;
                             
-                            // Hitung skala berdasarkan ukuran frame asli
-                            const scaleX = frameImg.naturalWidth / baseFrameWidth;
-                            const scaleY = frameImg.naturalHeight / baseFrameHeight;
-                            
-                            // Skala slot sesuai dengan ukuran frame
-                            const scaledX = slot.x * scaleX;
-                            const scaledY = slot.y * scaleY;
-                            const scaledWidth = slot.width * scaleX;
-                            const scaledHeight = slot.height * scaleY;
-                            const scaledRadius = slot.radius * scaleX;
+                            console.log('Processing photo:', index);
+                            console.log('Photo dimensions:', photoImg.naturalWidth, 'x', photoImg.naturalHeight);
+                            console.log('Original slot:', slot);
 
+                            // Gunakan slot asli tanpa scaling
+                            const scaledSlot = {
+                                x: slot.x,
+                                y: slot.y,
+                                width: slot.width,
+                                height: slot.height,
+                                radius: slot.radius
+                            };
+                            
+                            console.log('Using slot:', scaledSlot);
+
+                            // Clip area foto (no rounding)
                             ctx.save();
-                            
-                            // Buat clipping path untuk foto
-                            roundedRect(ctx, 
-                                scaledX, 
-                                scaledY, 
-                                scaledWidth, 
-                                scaledHeight, 
-                                scaledRadius
+                            ctx.beginPath();
+                            ctx.rect(
+                                scaledSlot.x, 
+                                scaledSlot.y, 
+                                scaledSlot.width, 
+                                scaledSlot.height
                             );
                             ctx.clip();
                             
-                            // Hitung aspek rasio
+                            // Gambar foto dengan perhitungan aspek rasio
                             const photoRatio = photoImg.naturalWidth / photoImg.naturalHeight;
-                            const slotRatio = scaledWidth / scaledHeight;
+                            const slotRatio = scaledSlot.width / scaledSlot.height;
                             
-                            // Hitung dimensi foto yang akan digambar
-                            let drawWidth, drawHeight;
+                            // Calculate photo and slot ratios
+                            let drawWidth, drawHeight, drawX, drawY;
                             
-                            if (photoRatio > slotRatio) {
-                                // Foto lebih lebar - sesuaikan dengan tinggi slot
-                                drawHeight = scaledHeight;
-                                drawWidth = scaledHeight * photoRatio;
+                            console.log('Photo size:', photoImg.naturalWidth, photoImg.naturalHeight);
+                            console.log('Scaled slot:', scaledSlot);
+
+                            if (photoImg.naturalWidth / photoImg.naturalHeight > scaledSlot.width / scaledSlot.height) {
+                                // Jika foto lebih lebar, sesuaikan dengan tinggi slot dan crop sisi
+                                drawHeight = scaledSlot.height;
+                                drawWidth = drawHeight * photoRatio;
+                                drawY = scaledSlot.y;
+                                drawX = scaledSlot.x - (drawWidth - scaledSlot.width) / 2;
                             } else {
-                                // Foto lebih tinggi - sesuaikan dengan lebar slot
-                                drawWidth = scaledWidth;
-                                drawHeight = scaledWidth / photoRatio;
+                                // Jika foto lebih tinggi atau sama, sesuaikan dengan lebar slot dan crop atas/bawah
+                                drawWidth = scaledSlot.width;
+                                drawHeight = drawWidth / photoRatio;
+                                drawX = scaledSlot.x;
+                                drawY = scaledSlot.y - (drawHeight - scaledSlot.height) / 2;
                             }
                             
-                            // Hitung posisi untuk memusatkan foto
-                            const drawX = scaledX + (scaledWidth - drawWidth) / 2;
-                            const drawY = scaledY + (scaledHeight - drawHeight) / 2;
+                            console.log('Draw dimensions:', { drawX, drawY, drawWidth, drawHeight });
                             
                             // Gambar foto
+                            console.log('Drawing photo at:', { drawX, drawY, drawWidth, drawHeight });
                             ctx.drawImage(photoImg, 0, 0, photoImg.naturalWidth, photoImg.naturalHeight,
                                         drawX, drawY, drawWidth, drawHeight);
                             ctx.restore();
+                            console.log('Photo drawn');
                         });
+
+                        // Reset composite operation dan gambar frame final
+                        ctx.globalCompositeOperation = 'source-over';
+                        console.log('Drawing final frame');
+                        ctx.drawImage(frameImg, 0, 0);
                         
                         resolve(canvas.toDataURL('image/png'));
                     } catch (error) {
@@ -580,6 +596,7 @@ function generateFinalImage() {
                 }
             };
             
+            // Set up load handlers
             frameImg.onload = checkAllLoaded;
             frameImg.onerror = () => reject(new Error('Failed to load frame image'));
             
@@ -628,29 +645,25 @@ function roundedRect(ctx, x, y, width, height, radius) {
 }
 
 function drawAndCropImage(ctx, img, dx, dy, dWidth, dHeight) {
-    // Calculate aspect ratios
     const imgAspectRatio = img.naturalWidth / img.naturalHeight;
     const slotAspectRatio = dWidth / dHeight;
-    
-    // Calculate dimensions to fit the image in the slot while maintaining aspect ratio
-    let drawWidth, drawHeight, drawX, drawY;
+    let sx, sy, sWidth, sHeight;
     
     if (imgAspectRatio > slotAspectRatio) {
-        // Image is wider than slot
-        drawHeight = dHeight;
-        drawWidth = drawHeight * imgAspectRatio;
-        drawX = dx - (drawWidth - dWidth) / 2;
-        drawY = dy;
+        // Image is wider - crop sides
+        sHeight = img.naturalHeight; 
+        sWidth = sHeight * slotAspectRatio;
+        sx = (img.naturalWidth - sWidth) / 2; 
+        sy = 0;
     } else {
-        // Image is taller than slot
-        drawWidth = dWidth;
-        drawHeight = drawWidth / imgAspectRatio;
-        drawX = dx;
-        drawY = dy - (drawHeight - dHeight) / 2;
+        // Image is taller - crop top/bottom
+        sWidth = img.naturalWidth; 
+        sHeight = sWidth / slotAspectRatio;
+        sx = 0; 
+        sy = (img.naturalHeight - sHeight) / 2;
     }
     
-    // Draw the full image, scaled and centered
-    ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, drawX, drawY, drawWidth, drawHeight);
+    ctx.drawImage(img, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight);
 }
 
 function resetApp() {
@@ -679,7 +692,8 @@ document.getElementById('use-camera-button').addEventListener('click', startCame
 document.getElementById('upload-input').addEventListener('change', handleFileUpload);
 document.getElementById('capture-button').addEventListener('click', handleCapture);
 document.getElementById('done-capturing-button').addEventListener('click', goToSelectionScreen);
-document.getElementById('confirm-selection-button').addEventListener('click', processAndFinalize);
+// document.getElementById('confirm-selection-button').addEventListener('click', processAndFinalize);
+document.getElementById('confirm-selection-button').addEventListener('click', startCroppingProcess);
 document.getElementById('retake-button').addEventListener('click', goToSelectionScreen);
 document.getElementById('start-over-button').addEventListener('click', resetApp);
 
