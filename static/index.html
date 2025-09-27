@@ -7,25 +7,23 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/cropperjs"></script>
+    <link rel="stylesheet" href="https://unpkg.com/cropperjs/dist/cropper.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; }
         .screen { display: none; }
         .active { display: flex; }
         .loader {
-            border: 8px solid #f3f3f3; /* Light grey */
-            border-top: 8px solid #3498db; /* Blue */
-            border-radius: 50%;
-            width: 60px;
-            height: 60px;
+            border: 8px solid #f3f3f3; border-top: 8px solid #3498db;
+            border-radius: 50%; width: 60px; height: 60px;
             animation: spin 1s linear infinite;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .thumbnail-selected {
-            outline: 4px solid #3B82F6; /* Blue outline */
-            outline-offset: 2px;
-            transform: scale(1.05);
-            transition: all 0.2s ease-in-out;
+        .thumbnail-selected { outline: 4px solid #3B82F6; outline-offset: 2px; transform: scale(1.05); }
+        #cropper-container img { display: block; max-width: 100%; }
+        #frame-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            opacity: 0.5; pointer-events: none; z-index: 10;
         }
     </style>
 </head>
@@ -36,80 +34,63 @@
             <p class="text-gray-500">Abadikan Momen, Bagikan Cerita.</p>
         </header>
         <main class="p-4 md:p-6 min-h-[450px]">
-            <!-- Screen 0: Landing Page -->
             <div id="landing-screen" class="screen flex-col items-center justify-center text-center">
                 <h2 class="text-4xl font-bold mb-2">Selamat Datang!</h2>
-                <p class="text-lg text-gray-600 mb-6">Abadikan momen spesial Anda dengan satu klik.</p>
-                <button id="start-button" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-8 rounded-lg shadow-md text-xl">Mulai Gratis</button>
+                <p class="text-lg text-gray-600 mb-6">Abadikan momen spesial Anda.</p>
+                <button id="start-button" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-8 rounded-lg shadow-md text-xl">Mulai</button>
             </div>
-
-            <!-- Screen 1: Frame Selection -->
             <div id="frame-screen" class="screen flex-col items-center">
-                <h2 class="text-2xl font-semibold mb-4 text-center">Langkah 1: Pilih Bingkai Favorit Anda</h2>
+                <h2 class="text-2xl font-semibold mb-4 text-center">Langkah 1: Pilih Bingkai</h2>
                 <div id="frame-container" class="grid grid-cols-2 gap-4 md:gap-6 cursor-pointer w-full"></div>
             </div>
-            
-            <!-- Screen 2: Capture / Upload Method -->
             <div id="method-screen" class="screen flex-col items-center justify-center">
                 <h2 class="text-2xl font-semibold mb-6 text-center">Langkah 2: Siapkan Foto</h2>
                 <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
                     <button id="use-camera-button" class="bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-8 rounded-lg">Gunakan Kamera</button>
-                    <button class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-4 px-8 rounded-lg" onclick="document.getElementById('upload-input').click();">Unggah dari Galeri</button>
+                    <button id="upload-button" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-4 px-8 rounded-lg">Unggah Galeri</button>
                     <input type="file" id="upload-input" multiple accept="image/*" class="hidden">
                 </div>
             </div>
-
-            <!-- Screen 3: Capture -->
             <div id="capture-screen" class="screen flex-col items-center">
                 <h2 id="capture-title" class="text-2xl font-semibold mb-4 text-center">Ambil Foto</h2>
-                <div class="w-full bg-gray-200 rounded-lg overflow-hidden shadow-inner mb-4">
-                    <video id="video" class="w-full h-auto" autoplay playsinline></video>
-                    <canvas id="capture-canvas" class="hidden"></canvas>
-                </div>
+                <div class="w-full bg-gray-200 rounded-lg overflow-hidden shadow-inner mb-4"><video id="video" class="w-full h-auto" autoplay playsinline></video><canvas id="capture-canvas" class="hidden"></canvas></div>
                 <div class="flex items-center">
                     <button id="capture-button" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg shadow-md">Ambil Foto</button>
                     <button id="done-capturing-button" class="ml-4 bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg shadow-md">Selesai</button>
                 </div>
             </div>
-
-            <!-- Screen 4: Photo Selection Gallery -->
             <div id="selection-screen" class="screen flex-col items-center">
-                <h2 id="selection-title" class="text-2xl font-semibold mb-4 text-center">Langkah 3: Pilih Foto Terbaik</h2>
+                <h2 id="selection-title" class="text-2xl font-semibold mb-4 text-center">Langkah 3: Pilih Foto</h2>
                 <div id="gallery-container" class="grid grid-cols-3 md:grid-cols-4 gap-2 mb-4 w-full h-64 overflow-y-auto p-2 bg-gray-50 rounded-lg"></div>
                 <button id="confirm-selection-button" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg shadow-md disabled:bg-gray-400" disabled>Lanjutkan</button>
-                <button id="retake-button" class="ml-4 bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-6 rounded-lg shadow-md">Ulangi Pilihan</button>
+                <button id="retake-button" class="ml-4 bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-6 rounded-lg shadow-md">Ulangi</button>
             </div>
-
             <div id="crop-screen" class="screen flex-col items-center">
-                <h2 class="text-2xl font-semibold mb-4 text-center">Langkah 3.5: Atur Pangkasan Foto</h2>
-                <div id="cropper-container" class="w-full h-96 mb-4">
-                    <img id="current-crop-image" class="max-w-full max-h-full" />
+                <h2 id="crop-title" class="text-2xl font-semibold mb-4 text-center">Langkah 3.5: Atur Posisi Foto</h2>
+                <div id="cropper-container" class="relative w-full h-96 mb-4 bg-gray-200 flex justify-center items-center">
+                    <img id="cropper-image" class="max-w-full max-h-full" /><img id="frame-overlay" src="" alt="Frame Overlay" />
                 </div>
                 <div id="crop-controls" class="flex space-x-4">
-                    <button id="next-photo-button" class="bg-blue-500 ...">Foto Selanjutnya</button>
-                    <button id="finish-crop-button" class="bg-green-500 ...">Selesai Cropping</button>
+                    <button id="next-photo-button" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg">Selanjutnya</button>
+                    <button id="finish-crop-button" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg">Selesai</button>
                 </div>
             </div>
-
-            <!-- Screen 5: Result -->
             <div id="result-screen" class="screen flex-col items-center text-center">
                  <h2 class="text-2xl font-semibold mb-4">Foto Anda Siap!</h2>
                 <canvas id="result-canvas" class="w-full max-w-xs rounded-lg shadow-lg mb-4"></canvas>
                 <div class="bg-gray-100 p-4 rounded-lg w-full max-w-md">
-                     <p class="font-semibold mb-2">Pindai QR Code atau gunakan tautan:</p>
+                     <p class="font-semibold mb-2">Pindai QR Code atau salin tautan:</p>
                     <div id="qrcode" class="flex justify-center mb-4"></div>
                     <input id="photo-link" type="text" readonly class="w-full p-2 border rounded-md text-center text-sm bg-gray-200 cursor-pointer" onclick="this.select()">
                 </div>
                 <button id="start-over-button" class="mt-4 bg-gray-800 hover:bg-gray-900 text-white font-bold py-3 px-6 rounded-lg shadow-md">Mulai Lagi</button>
             </div>
-
-            <!-- Universal Loading Screen -->
             <div id="loading-screen" class="screen flex-col items-center justify-center">
                 <div class="loader"></div>
                 <p id="loading-text" class="mt-4 text-lg font-medium text-gray-600">Memproses...</p>
             </div>
         </main>
     </div>
-    <script src="/static/js/app.js"></script>
+    <script type="module" src="/static/js/app.js" defer></script>
 </body>
 </html>
